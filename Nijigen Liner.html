@@ -1,0 +1,470 @@
+ <!DOCTYPE html>
+ <html lang="zh-CN">
+ <head>
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>图片描边工具</title>
+     <script src="https://cdn.tailwindcss.com"></script>
+     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+     <style>
+         body { font-family: 'Inter', 'Helvetica Neue', 'Helvetica', 'Arial', 'sans-serif'; }
+         .file-input-label:hover { background-color: #374151; border-color: #4f46e5; }
+         .image-container { position: relative; }
+         .remove-button {
+             position: absolute; top: 0.5rem; right: 0.5rem;
+             background: rgba(0, 0, 0, 0.7); color: white; border: none;
+             border-radius: 0.25rem; padding: 0.2rem 0.5rem; cursor: pointer;
+             font-size: 0.8rem; opacity: 0; transition: opacity 0.2s ease-in-out;
+         }
+         .image-container:hover .remove-button { opacity: 1; }
+         .btn {
+             display: inline-flex; align-items: center; justify-content: center;
+             padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600;
+             transition: background-color 0.3s, transform 0.1s;
+             border: 1px solid transparent;
+         }
+         .btn:active { transform: scale(0.98); }
+         .btn-primary { background-color: #4f46e5; color: white; }
+         .btn-primary:hover { background-color: #6366f1; }
+         .btn-secondary { background-color: #374151; color: #d1d5db; border-color: #4b5563; }
+         .btn-secondary:hover { background-color: #4b5563; }
+         .btn-success { background-color: #16a34a; color: white; }
+         .btn-success:hover { background-color: #15803d; }
+         .btn-info { background-color: #0ea5e9; color: white; }
+         .btn-info:hover { background-color: #0284c7; }
+         /* 新增：清理按钮样式 */
+         .btn-danger { background-color: #dc2626; color: white; }
+         .btn-danger:hover { background-color: #b91c1c; }
+     </style>
+ </head>
+ <body class="bg-gray-900 text-gray-200">
+ 
+     <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+         
+         <header class="text-center mb-8">
+             <h1 class="text-4xl md:text-5xl font-bold text-white mb-2">图片描边工具</h1>
+             <p class="text-gray-400 text-lg">什么？除了我，还有人要用？</p>
+         </header>
+ 
+         <!-- 全局控制 -->
+         <div class="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8">
+             <h3 class="text-xl font-bold text-center mb-4 text-white">全局默认设置</h3>
+             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                 <div class="flex flex-col items-center">
+                     <label for="global-stroke-color" class="block text-sm font-medium text-gray-300 mb-2">描边颜色</label>
+                     <input type="color" id="global-stroke-color" value="#FFFFFF" class="p-1 h-12 w-24 bg-gray-700 border border-gray-600 rounded-lg cursor-pointer">
+                 </div>
+                 <div class="flex flex-col items-center">
+                     <label for="global-stroke-width" class="block text-sm font-medium text-gray-300 mb-2">描边宽度: <span id="global-stroke-width-value" class="font-bold text-indigo-400">5</span>px</label>
+                     <input id="global-stroke-width" type="range" min="1" max="50" value="5" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                 </div>
+                 <div class="flex flex-col items-center">
+                      <label for="image-upload" class="file-input-label w-full text-center cursor-pointer bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-all duration-300">
+                         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 inline-block mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                         选择或添加图片
+                     </label>
+                     <input type="file" id="image-upload" multiple accept="image/*" class="hidden">
+                 </div>
+             </div>
+         </div>
+ 
+         <!-- 状态与下载区域 -->
+         <div id="status-area" class="text-center mb-8 h-12 flex items-center justify-center gap-4">
+              <p id="status-text" class="text-gray-500">请先选择图片文件...</p>
+              <div id="download-buttons" class="hidden space-x-2 md:space-x-4">
+                  <button id="download-all-zip-btn" class="btn btn-success">
+                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2H4zm0 14V4h12v12H4z" clip-rule="evenodd" /><path d="M9 9a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1zm-1 4a1 1 0 100 2h4a1 1 0 100-2H8z" /></svg>
+                     打包下载 (ZIP)
+                  </button>
+                  <button id="download-all-individual-btn" class="btn btn-info">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a1 1 0 011-1h14a1 1 0 110 2H3a1 1 0 01-1-1z" /></svg>
+                      分别下载全部
+                  </button>
+                  <!-- 新增：清理全部按钮 -->
+                  <button id="clear-all-btn" class="btn btn-danger">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
+                      清理全部
+                  </button>
+              </div>
+         </div>
+ 
+         <!-- 结果展示区 -->
+         <div id="result-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
+ 
+     </div>
+ 
+     <script>
+     document.addEventListener('DOMContentLoaded', () => {
+         // --- 元素获取 ---
+         const imageUpload = document.getElementById('image-upload');
+         const globalStrokeColorInput = document.getElementById('global-stroke-color');
+         const globalStrokeWidthInput = document.getElementById('global-stroke-width');
+         const globalStrokeWidthValue = document.getElementById('global-stroke-width-value');
+         const resultContainer = document.getElementById('result-container');
+         const statusText = document.getElementById('status-text');
+         const downloadButtons = document.getElementById('download-buttons');
+         const downloadAllZipBtn = document.getElementById('download-all-zip-btn');
+         const downloadAllIndividualBtn = document.getElementById('download-all-individual-btn');
+         const clearAllBtn = document.getElementById('clear-all-btn'); // 新增
+ 
+         // --- 状态变量 ---
+         let imagesData = [];
+ 
+         // --- 辅助函数 ---
+         const debounce = (func, delay) => {
+             let timeoutId;
+             return (...args) => {
+                 clearTimeout(timeoutId);
+                 timeoutId = setTimeout(() => func.apply(this, args), delay);
+             };
+         };
+ 
+         function triggerDownload(data, filename) {
+             const link = document.createElement('a');
+             link.download = filename;
+             
+             if (data instanceof Blob) {
+                 const url = URL.createObjectURL(data);
+                 link.href = url;
+                 document.body.appendChild(link);
+                 link.click();
+                 document.body.removeChild(link);
+                 URL.revokeObjectURL(url);
+             } else {
+                 link.href = data;
+                 document.body.appendChild(link);
+                 link.click();
+                 document.body.removeChild(link);
+             }
+         }
+ 
+         // --- 事件监听 ---
+         globalStrokeWidthInput.addEventListener('input', () => {
+             globalStrokeWidthValue.textContent = globalStrokeWidthInput.value;
+             updateFromGlobalSettings();
+         });
+         globalStrokeColorInput.addEventListener('change', updateFromGlobalSettings);
+         imageUpload.addEventListener('change', handleFiles);
+         downloadAllZipBtn.addEventListener('click', () => downloadAll(true));
+         downloadAllIndividualBtn.addEventListener('click', () => downloadAll(false));
+         clearAllBtn.addEventListener('click', clearAllImages); // 新增
+ 
+         /**
+          * 新增：清理所有图片
+          */
+         function clearAllImages() {
+             imagesData = [];
+             renderAllImages();
+         }
+ 
+         /**
+          * 处理文件上传
+          */
+         function handleFiles(e) {
+             const files = e.target.files;
+             if (!files.length) return;
+ 
+             statusText.textContent = `正在加载 ${files.length} 张图片...`;
+             statusText.classList.remove('hidden');
+             downloadButtons.classList.add('hidden');
+ 
+             const loadPromises = Array.from(files).map(file => {
+                 return new Promise((resolve, reject) => {
+                     const reader = new FileReader();
+                     reader.onload = (event) => {
+                         const img = new Image();
+                         img.onload = () => {
+                             imagesData.push({
+                                 id: `img-${Math.random().toString(36).substring(2, 9)}`,
+                                 name: file.name,
+                                 img: img,
+                                 useGlobalSettings: true,
+                                 strokeColor: globalStrokeColorInput.value,
+                                 strokeWidth: parseInt(globalStrokeWidthInput.value, 10)
+                             });
+                             resolve();
+                         };
+                         img.onerror = reject;
+                         img.src = event.target.result;
+                     };
+                     reader.onerror = reject;
+                     reader.readAsDataURL(file);
+                 });
+             });
+ 
+             Promise.all(loadPromises).then(() => {
+                 renderAllImages();
+             }).catch(error => {
+                 console.error("加载图片时出错:", error);
+                 statusText.textContent = "加载图片时出错，请检查控制台。";
+             });
+         }
+ 
+         /**
+          * 渲染所有图片卡片
+          */
+         function renderAllImages() {
+             resultContainer.innerHTML = '';
+             imagesData.forEach(imageData => renderImageCard(imageData));
+             updateStatusAndDownloadButtons();
+         }
+ 
+         /**
+          * 渲染单个图片卡片
+          */
+         function renderImageCard(imageData) {
+             const card = document.createElement('div');
+             card.className = 'bg-gray-800 rounded-lg shadow-lg overflow-hidden flex flex-col image-container';
+             card.dataset.imageId = imageData.id;
+ 
+             const imageWrapper = document.createElement('div');
+             imageWrapper.className = 'relative';
+             
+             const removeButton = document.createElement('button');
+             removeButton.className = 'remove-button';
+             removeButton.innerHTML = '&times;';
+             removeButton.title = '移除图片';
+             removeButton.addEventListener('click', () => removeImage(imageData.id));
+ 
+             const imgElement = document.createElement('img');
+             imgElement.className = 'w-full h-auto object-cover bg-gray-700/50 min-h-[150px]';
+ 
+             imageWrapper.appendChild(imgElement);
+             imageWrapper.appendChild(removeButton);
+             card.appendChild(imageWrapper);
+ 
+             const controlsDiv = document.createElement('div');
+             controlsDiv.className = 'p-4 space-y-4 flex-grow flex flex-col';
+ 
+             const individualControls = document.createElement('div');
+             individualControls.className = 'space-y-3';
+             
+             const colorControl = createFormControl('描边颜色:', createColorInput(imageData));
+             const widthControl = createFormControl('描边宽度:', createWidthSlider(imageData));
+             
+             individualControls.appendChild(colorControl);
+             individualControls.appendChild(widthControl);
+             controlsDiv.appendChild(individualControls);
+ 
+             const actionsDiv = document.createElement('div');
+             actionsDiv.className = 'mt-auto pt-4 space-y-2';
+             
+             const resetButton = createResetButton(imageData);
+             const downloadButton = createDownloadButton(imageData);
+             
+             actionsDiv.appendChild(resetButton);
+             actionsDiv.appendChild(downloadButton);
+             controlsDiv.appendChild(actionsDiv);
+ 
+             card.appendChild(controlsDiv);
+             resultContainer.appendChild(card);
+             
+             updateCardUI(imageData.id);
+         }
+ 
+         // --- UI 创建辅助函数 ---
+         function createFormControl(labelText, controlElement) {
+             const div = document.createElement('div');
+             const label = document.createElement('label');
+             label.className = 'text-sm font-medium text-gray-400 block mb-1';
+             label.textContent = labelText;
+             div.appendChild(label);
+             div.appendChild(controlElement);
+             return div;
+         }
+ 
+         function createColorInput(imageData) {
+             const colorInput = document.createElement('input');
+             colorInput.type = 'color';
+             colorInput.className = 'w-full p-1 h-10 bg-gray-700 border border-gray-600 rounded-lg cursor-pointer';
+             colorInput.addEventListener('change', (e) => {
+                 updateImageSetting(imageData.id, { useGlobalSettings: false, strokeColor: e.target.value });
+             });
+             return colorInput;
+         }
+ 
+         function createWidthSlider(imageData) {
+             const widthInput = document.createElement('input');
+             widthInput.type = 'range';
+             widthInput.min = '1';
+             widthInput.max = '50';
+             widthInput.className = 'w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer';
+             const debouncedUpdate = debounce((value) => {
+                 updateImageSetting(imageData.id, { useGlobalSettings: false, strokeWidth: value });
+             }, 200);
+             widthInput.addEventListener('input', (e) => debouncedUpdate(parseInt(e.target.value, 10)));
+             return widthInput;
+         }
+ 
+         function createResetButton(imageData) {
+             const button = document.createElement('button');
+             button.className = 'w-full btn btn-secondary';
+             button.textContent = '重置为默认';
+             button.addEventListener('click', () => {
+                 updateImageSetting(imageData.id, { useGlobalSettings: true });
+             });
+             return button;
+         }
+ 
+         function createDownloadButton(imageData) {
+             const button = document.createElement('button');
+             button.className = 'w-full btn btn-primary';
+             button.textContent = '下载这张图';
+             button.addEventListener('click', () => {
+                 const settings = getCurrentImageSettings(imageData);
+                 const canvas = applyStroke(imageData.img, settings.strokeColor, settings.strokeWidth);
+                 triggerDownload(canvas.toDataURL('image/png'), `stroked-${imageData.name.split('.').slice(0, -1).join('.')}.png`);
+             });
+             return button;
+         }
+ 
+         // --- 逻辑与更新函数 ---
+ 
+         function removeImage(id) {
+             imagesData = imagesData.filter(img => img.id !== id);
+             renderAllImages();
+         }
+ 
+         function updateFromGlobalSettings() {
+             imagesData.forEach(img => {
+                 if (img.useGlobalSettings) {
+                     updateCardUI(img.id);
+                 }
+             });
+         }
+ 
+         function updateImageSetting(id, newSettings) {
+             const imageData = imagesData.find(img => img.id === id);
+             if (imageData) {
+                 Object.assign(imageData, newSettings);
+                 updateCardUI(id);
+             }
+         }
+ 
+         function updateCardUI(id) {
+             const imageData = imagesData.find(img => img.id === id);
+             if (!imageData) return;
+ 
+             const card = document.querySelector(`.image-container[data-image-id="${id}"]`);
+             if (!card) return;
+ 
+             const settings = getCurrentImageSettings(imageData);
+             
+             card.querySelector('input[type="color"]').value = settings.strokeColor;
+             const widthSlider = card.querySelector('input[type="range"]');
+             widthSlider.value = settings.strokeWidth;
+             const widthLabel = widthSlider.previousElementSibling;
+             widthLabel.textContent = `描边宽度: ${settings.strokeWidth}px`;
+ 
+             card.querySelector('.btn-secondary').style.display = imageData.useGlobalSettings ? 'none' : 'inline-flex';
+ 
+             const imgElement = card.querySelector('img');
+             const canvas = applyStroke(imageData.img, settings.strokeColor, settings.strokeWidth);
+             imgElement.src = canvas.toDataURL('image/png');
+         }
+ 
+         function getCurrentImageSettings(imageData) {
+             if (imageData.useGlobalSettings) {
+                 return {
+                     strokeColor: globalStrokeColorInput.value,
+                     strokeWidth: parseInt(globalStrokeWidthInput.value, 10)
+                 };
+             }
+             return {
+                 strokeColor: imageData.strokeColor,
+                 strokeWidth: imageData.strokeWidth
+             };
+         }
+ 
+         function updateStatusAndDownloadButtons() {
+             if (imagesData.length > 0) {
+                 statusText.classList.add('hidden');
+                 downloadButtons.classList.remove('hidden');
+             } else {
+                 statusText.textContent = "请先选择图片文件...";
+                 statusText.classList.remove('hidden');
+                 downloadButtons.classList.add('hidden');
+             }
+         }
+ 
+         function applyStroke(img, color, width) {
+             const canvas = document.createElement('canvas');
+             const ctx = canvas.getContext('2d');
+             const d = Math.max(1, width);
+             canvas.width = img.width + d * 2;
+             canvas.height = img.height + d * 2;
+ 
+             const tintCanvas = document.createElement('canvas');
+             const tintCtx = tintCanvas.getContext('2d');
+             tintCanvas.width = img.width;
+             tintCanvas.height = img.height;
+ 
+             tintCtx.fillStyle = color;
+             tintCtx.fillRect(0, 0, tintCanvas.width, tintCanvas.height);
+             tintCtx.globalCompositeOperation = 'destination-in';
+             tintCtx.drawImage(img, 0, 0);
+ 
+             ctx.drawImage(tintCanvas, 0, d);
+             ctx.drawImage(tintCanvas, d, 0);
+             ctx.drawImage(tintCanvas, d * 2, d);
+             ctx.drawImage(tintCanvas, d, d * 2);
+             ctx.drawImage(tintCanvas, 0, 0);
+             ctx.drawImage(tintCanvas, d * 2, 0);
+             ctx.drawImage(tintCanvas, 0, d * 2);
+             ctx.drawImage(tintCanvas, d * 2, d * 2);
+ 
+             ctx.drawImage(img, d, d);
+             return canvas;
+         }
+ 
+         async function downloadAll(asZip) {
+             if (imagesData.length === 0) return;
+ 
+             if (asZip) {
+                 statusText.textContent = '正在打包 ZIP 文件...';
+                 statusText.classList.remove('hidden');
+                 downloadButtons.classList.add('hidden');
+
+                 const zip = new JSZip();
+                 for (const imageData of imagesData) {
+                     const settings = getCurrentImageSettings(imageData);
+                     const canvas = applyStroke(imageData.img, settings.strokeColor, settings.strokeWidth);
+                     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                     zip.file(`stroked-${imageData.name.split('.').slice(0, -1).join('.')}.png`, blob);
+                 }
+                 const content = await zip.generateAsync({ type: "blob" });
+                 triggerDownload(content, "stroked-images.zip");
+                 updateStatusAndDownloadButtons();
+             } else {
+                 statusText.textContent = `准备下载 ${imagesData.length} 张图片...`;
+                 statusText.classList.remove('hidden');
+                 downloadButtons.classList.add('hidden');
+                 
+                 function downloadSequentially(index) {
+                     if (index >= imagesData.length) {
+                         statusText.textContent = '所有图片下载完成！';
+                         setTimeout(() => {
+                            updateStatusAndDownloadButtons();
+                         }, 2000);
+                         return;
+                     }
+
+                     const imageData = imagesData[index];
+                     statusText.textContent = `正在下载第 ${index + 1} / ${imagesData.length} 张图片...`;
+                     
+                     const settings = getCurrentImageSettings(imageData);
+                     const canvas = applyStroke(imageData.img, settings.strokeColor, settings.strokeWidth);
+                     triggerDownload(canvas.toDataURL('image/png'), `stroked-${imageData.name.split('.').slice(0, -1).join('.')}.png`);
+
+                     setTimeout(() => {
+                         downloadSequentially(index + 1);
+                     }, 500);
+                 }
+
+                 downloadSequentially(0);
+             }
+         }
+     });
+     </script>
+ </body>
+ </html>
